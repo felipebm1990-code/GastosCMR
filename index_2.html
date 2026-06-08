@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Gastos CMR</title>
+<style>
+:root {
+  --me:#185FA5; --me-bg:#E6F1FB;
+  --her:#3B6D11; --her-bg:#EAF3DE;
+  --shared:#854F0B; --shared-bg:#FAEEDA;
+  --danger:#E24B4A;
+  --border:#e5e5e5; --muted:#888; --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:#f5f5f7;min-height:100vh;max-width:480px;margin:0 auto}
+.header{background:white;padding:16px 20px 0;border-bottom:.5px solid var(--border);position:sticky;top:0;z-index:10}
+.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.app-title{font-size:17px;font-weight:600}
+.sync-btn{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);padding:4px;transition:transform .5s}
+.syncing{transform:rotate(360deg)}
+.tabs{display:flex}
+.tab{flex:1;padding:10px 0 11px;font-size:13px;font-weight:500;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .15s}
+.tab.active{color:#111;border-bottom-color:#111}
+.content{padding:16px}
+
+.form-card{background:white;border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.form-row.single{grid-template-columns:1fr}
+.form-row.triple{grid-template-columns:1fr 1fr 1fr}
+.fg label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.fg input,.fg select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:15px;font-family:var(--font);background:white;color:#111;-webkit-appearance:none}
+.fg input:focus,.fg select:focus{outline:none;border-color:#999}
+.fg input.highlight{border-color:var(--me);background:#f0f7ff}
+.cuota-hint{font-size:12px;color:var(--muted);margin:-6px 0 8px;padding:6px 10px;background:#fafafa;border-radius:6px;display:none}
+.cuota-hint.visible{display:block}
+.cuota-hint strong{color:#111}
+.who-selector{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.who-btn{padding:10px 4px;border:1.5px solid var(--border);border-radius:8px;background:white;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);transition:all .15s;text-align:center}
+.who-btn.sel-me{border-color:var(--me);background:var(--me-bg);color:var(--me)}
+.who-btn.sel-her{border-color:var(--her);background:var(--her-bg);color:var(--her)}
+.who-btn.sel-shared{border-color:var(--shared);background:var(--shared-bg);color:var(--shared)}
+.submit-btn{width:100%;padding:14px;background:#111;color:white;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;margin-top:4px}
+.submit-btn:active{opacity:.8}
+.submit-btn:disabled{opacity:.4}
+
+.status-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:white;border-radius:8px;margin-bottom:12px;font-size:13px}
+.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dok{background:#639922}.derr{background:#E24B4A}.didle{background:#ccc}.dsync{background:#BA7517}
+
+.filter-row{display:flex;gap:8px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px}
+.fsel{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:white;color:#111;-webkit-appearance:none;min-width:100px;flex-shrink:0}
+
+.eitem{background:white;border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;transition:box-shadow .15s}
+.eitem:active{box-shadow:0 0 0 2px #ccc}
+.wbadge{font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0;margin-top:1px}
+.bme{background:var(--me-bg);color:var(--me)}.bher{background:var(--her-bg);color:var(--her)}.bshared{background:var(--shared-bg);color:var(--shared)}
+.einfo{flex:1;min-width:0}
+.edesc{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.emeta{font-size:12px;color:var(--muted);margin-top:2px}
+.ecuota{color:var(--me);font-weight:500}
+.eright{text-align:right;flex-shrink:0}
+.eamt{font-size:15px;font-weight:700}
+.edate{font-size:11px;color:var(--muted)}
+.edit-icon{color:#ccc;font-size:14px;flex-shrink:0;align-self:center}
+
+/* drawer */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;opacity:0;transition:opacity .2s;pointer-events:none}
+.drawer-overlay.open{opacity:1;pointer-events:all}
+.drawer{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(100%);width:100%;max-width:480px;background:white;border-radius:16px 16px 0 0;padding:20px 20px 32px;z-index:101;transition:transform .25s cubic-bezier(.4,0,.2,1);max-height:90vh;overflow-y:auto}
+.drawer.open{transform:translateX(-50%) translateY(0)}
+.drawer-handle{width:36px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 16px}
+.drawer-title{font-size:16px;font-weight:600;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.drawer-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);padding:0 4px}
+.drawer-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.drawer-save{padding:13px;background:#111;color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
+.drawer-save:disabled{opacity:.4}
+.drawer-delete{padding:13px;background:white;color:var(--danger);border:1px solid #f9c0c0;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer}
+
+/* summary */
+.period-nav{display:flex;align-items:center;justify-content:space-between;background:white;border-radius:var(--radius);padding:10px 14px;margin-bottom:6px}
+.mnbtn{background:none;border:1px solid var(--border);border-radius:6px;width:32px;height:32px;cursor:pointer;font-size:16px}
+.period-name{font-size:15px;font-weight:600}
+.period-dates{text-align:center;font-size:12px;color:var(--muted);margin-bottom:12px}
+
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.mcard{background:white;border-radius:var(--radius);padding:12px 10px;text-align:center}
+.mlabel{font-size:11px;color:var(--muted);margin-bottom:4px}
+.mval{font-size:16px;font-weight:700}
+.mval.me{color:var(--me)}.mval.her{color:var(--her)}.mval.shared{color:var(--shared)}
+.mcount{font-size:11px;color:var(--muted)}
+
+.committed-banner{background:white;border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.cb-left{font-size:12px;color:var(--muted)}
+.cb-right{text-align:right}
+.cb-val{font-size:16px;font-weight:700;color:var(--shared)}
+.cb-sub{font-size:11px;color:var(--muted)}
+
+.slabel{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.cat-table{background:white;border-radius:var(--radius);overflow:hidden;margin-bottom:12px}
+.crow{display:grid;grid-template-columns:1fr 68px 68px 68px;padding:9px 12px;font-size:13px;border-bottom:.5px solid var(--border)}
+.crow:last-child{border-bottom:none}
+.crow.header{font-size:11px;font-weight:600;color:var(--muted);background:#fafafa}
+.cv{text-align:right}
+
+.balance-card{background:white;border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.btitle{font-size:12px;color:var(--muted);margin-bottom:6px}
+.bamt{font-size:24px;font-weight:700;margin-bottom:6px}
+.bdesc{font-size:13px;color:var(--muted);line-height:1.5}
+
+.setup-card{background:white;border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.stitle{font-size:15px;font-weight:600;margin-bottom:8px}
+.sdesc{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px}
+.cfg-row{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.cfg-row label{font-size:12px;color:var(--muted)}
+.cfg-input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:var(--font)}
+.cfg-input.mono{font-family:monospace;font-size:13px}
+.cfg-input:focus{outline:none;border-color:#999}
+.token-row{display:flex;gap:8px}
+.token-row .cfg-input{flex:1}
+.eye-btn{padding:0 12px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;font-size:16px;flex-shrink:0}
+.abtn{padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:white;font-size:14px;cursor:pointer;margin-right:8px;margin-bottom:8px}
+.abtn.danger{color:var(--danger);border-color:#f9c0c0}
+.lock-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;border-radius:20px;background:#EAF3DE;color:#3B6D11;margin-bottom:12px}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#111;color:white;padding:10px 20px;border-radius:20px;font-size:14px;opacity:0;transition:all .2s;pointer-events:none;white-space:nowrap;z-index:200}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.pagination{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 0;font-size:13px;color:var(--muted)}
+.pbtn{padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:white;font-size:13px;cursor:pointer}
+.pbtn:disabled{opacity:.3}
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <span class="app-title">💳 Gastos CMR</span>
+    <button class="sync-btn" id="sync-btn" onclick="syncNow()">⟳</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('add')">+ Nuevo</button>
+    <button class="tab" onclick="showTab('list')">Historial</button>
+    <button class="tab" onclick="showTab('summary')">Resumen</button>
+    <button class="tab" onclick="showTab('config')">Config</button>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- ADD -->
+  <div id="tab-add" class="tab-content">
+    <div id="status-bar" class="status-bar">
+      <span class="sdot didle" id="sdot"></span>
+      <span id="stxt">Configura la URL y el token en Config</span>
+    </div>
+    <div class="form-card">
+      <div class="form-row">
+        <div class="fg"><label>Monto total ($)</label>
+          <input type="number" id="f-amount" placeholder="0" inputmode="numeric" oninput="onAmountChange()"></div>
+        <div class="fg"><label>Fecha</label>
+          <input type="date" id="f-date"></div>
+      </div>
+      <div class="form-row triple" style="margin-bottom:4px">
+        <div class="fg"><label>Cuotas</label>
+          <select id="f-cuotas" onchange="onCuotasChange()">
+            <option value="1">Sin cuotas</option>
+            <option value="2">2</option><option value="3">3</option>
+            <option value="6">6</option><option value="12">12</option>
+            <option value="18">18</option><option value="24">24</option>
+          </select></div>
+        <div class="fg" id="fg-cuota-val" style="display:none">
+          <label>Cuota ($) <span style="color:var(--me);font-size:10px">ajustable</span></label>
+          <input type="number" id="f-cuota-val" placeholder="0" inputmode="numeric" class="highlight" oninput="onCuotaValChange()"></div>
+        <div class="fg" id="fg-cuota-total" style="display:none">
+          <label>Total real ($)</label>
+          <input type="number" id="f-cuota-total" placeholder="0" readonly style="color:var(--muted)"></div>
+      </div>
+      <div class="cuota-hint" id="cuota-hint"></div>
+      <div class="form-row single" style="margin-bottom:10px">
+        <div class="fg"><label>¿De quién?</label>
+          <div class="who-selector" id="add-who">
+            <button class="who-btn" data-who="me"     onclick="selectWho('add','me')">Felipe</button>
+            <button class="who-btn" data-who="her"    onclick="selectWho('add','her')">Maca</button>
+            <button class="who-btn" data-who="shared" onclick="selectWho('add','shared')">Compartido</button>
+          </div></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>Categoría</label>
+          <select id="f-cat">
+            <option>Supermercado</option><option>Restaurante</option><option>Hogar</option>
+            <option>Ropa</option><option>Salud</option><option>Niños</option>
+            <option>Tecnología</option><option>Viajes</option><option>Auto</option>
+            <option>Deporte</option><option>Servicios</option><option>Otro</option>
+          </select></div>
+        <div class="fg"><label>Descripción</label>
+          <input type="text" id="f-desc" placeholder="Jumbo, Sodimac…"></div>
+      </div>
+      <button class="submit-btn" id="submit-btn" onclick="addExpense()">Registrar gasto</button>
+    </div>
+  </div>
+
+  <!-- LIST -->
+  <div id="tab-list" class="tab-content" style="display:none">
+    <div class="filter-row">
+      <select class="fsel" id="fl-period" onchange="renderList()"><option value="">Todos los periodos</option></select>
+      <select class="fsel" id="fl-who" onchange="renderList()">
+        <option value="">Todos</option><option value="me">Felipe</option>
+        <option value="her">Maca</option><option value="shared">Compartido</option>
+      </select>
+      <select class="fsel" id="fl-cat" onchange="renderList()"><option value="">Todas</option></select>
+    </div>
+    <div id="expense-list"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <!-- SUMMARY -->
+  <div id="tab-summary" class="tab-content" style="display:none">
+    <div class="period-nav">
+      <button class="mnbtn" onclick="changePeriod(-1)">‹</button>
+      <span class="period-name" id="sum-period-name">—</span>
+      <button class="mnbtn" onclick="changePeriod(1)">›</button>
+    </div>
+    <div class="period-dates" id="sum-period-dates"></div>
+
+    <div class="slabel">Gastos del periodo</div>
+    <div class="metrics" id="metrics-period"></div>
+
+    <div class="committed-banner" id="committed-banner" style="display:none">
+      <div class="cb-left">💳 Cuotas comprometidas futuras<br><span style="font-size:11px">desde este periodo en adelante</span></div>
+      <div class="cb-right"><div class="cb-val" id="committed-val">$0</div><div class="cb-sub" id="committed-sub"></div></div>
+    </div>
+
+    <div class="slabel">Por categoría</div>
+    <div class="cat-table" id="cat-table">
+      <div class="crow header"><span>Categoría</span>
+        <span class="cv" style="color:var(--me)">Felipe</span>
+        <span class="cv" style="color:var(--her)">Maca</span>
+        <span class="cv" style="color:var(--shared)">Comp.</span></div>
+    </div>
+
+    <div class="balance-card">
+      <div class="btitle">Balance del periodo</div>
+      <div class="bamt" id="bamt">$0</div>
+      <div class="bdesc" id="bdesc"></div>
+    </div>
+  </div>
+
+  <!-- CONFIG -->
+  <div id="tab-config" class="tab-content" style="display:none">
+    <div class="setup-card">
+      <div class="stitle">🔗 Conexión</div>
+      <div class="sdesc">URL y token de tu Google Apps Script.</div>
+      <div class="cfg-row">
+        <label>URL del Script</label>
+        <input type="url" class="cfg-input mono" id="cfg-url" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <div class="cfg-row">
+        <label>Token secreto</label>
+        <div class="token-row">
+          <input type="password" class="cfg-input mono" id="cfg-token" placeholder="tu-clave-secreta">
+          <button class="eye-btn" onclick="toggleToken()">👁</button>
+        </div>
+      </div>
+      <div id="lock-status"></div>
+      <button class="abtn" onclick="saveAndTest()">Guardar y probar conexión</button>
+    </div>
+    <div class="setup-card">
+      <div class="stitle">📥 Importar Excel histórico</div>
+      <div class="sdesc">Carga los 75 gastos históricos. Solo agrega los que no existan.</div>
+      <button class="abtn" onclick="importFromExcel()">Importar gastos del Excel</button>
+    </div>
+    <div class="setup-card">
+      <div class="stitle">⚠️ Danger zone</div>
+      <button class="abtn danger" onclick="clearConfig()">Borrar configuración local</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT DRAWER -->
+<div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title">
+    <span>Editar gasto</span>
+    <button class="drawer-close" onclick="closeDrawer()">×</button>
+  </div>
+  <div class="form-row">
+    <div class="fg"><label>Monto total ($)</label>
+      <input type="number" id="e-amount" inputmode="numeric" oninput="onEditAmountChange()"></div>
+    <div class="fg"><label>Fecha</label>
+      <input type="date" id="e-date"></div>
+  </div>
+  <div class="form-row triple" style="margin-bottom:4px">
+    <div class="fg"><label>Cuotas</label>
+      <select id="e-cuotas" onchange="onEditCuotasChange()">
+        <option value="1">Sin cuotas</option>
+        <option value="2">2</option><option value="3">3</option>
+        <option value="6">6</option><option value="12">12</option>
+        <option value="18">18</option><option value="24">24</option>
+      </select></div>
+    <div class="fg" id="e-fg-cuota-val" style="display:none">
+      <label>Cuota ($) <span style="color:var(--me);font-size:10px">ajustable</span></label>
+      <input type="number" id="e-cuota-val" inputmode="numeric" class="highlight" oninput="onEditCuotaValChange()"></div>
+    <div class="fg" id="e-fg-cuota-total" style="display:none">
+      <label>Total real ($)</label>
+      <input type="number" id="e-cuota-total" readonly style="color:var(--muted)"></div>
+  </div>
+  <div class="cuota-hint" id="e-cuota-hint" style="margin-bottom:10px"></div>
+  <div class="form-row single" style="margin-bottom:10px">
+    <div class="fg"><label>¿De quién?</label>
+      <div class="who-selector" id="edit-who">
+        <button class="who-btn" data-who="me"     onclick="selectWho('edit','me')">Felipe</button>
+        <button class="who-btn" data-who="her"    onclick="selectWho('edit','her')">Maca</button>
+        <button class="who-btn" data-who="shared" onclick="selectWho('edit','shared')">Compartido</button>
+      </div></div>
+  </div>
+  <div class="form-row">
+    <div class="fg"><label>Categoría</label>
+      <select id="e-cat">
+        <option>Supermercado</option><option>Restaurante</option><option>Hogar</option>
+        <option>Ropa</option><option>Salud</option><option>Niños</option>
+        <option>Tecnología</option><option>Viajes</option><option>Auto</option>
+        <option>Deporte</option><option>Servicios</option><option>Otro</option>
+      </select></div>
+    <div class="fg"><label>Descripción</label>
+      <input type="text" id="e-desc" placeholder="Descripción"></div>
+  </div>
+  <div class="drawer-actions">
+    <button class="drawer-save" id="drawer-save-btn" onclick="saveEdit()">Guardar cambios</button>
+    <button class="drawer-delete" onclick="deleteFromDrawer()">Eliminar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var SCRIPT_URL = '';
+var TOKEN      = '';
+var expenses   = [];
+var addWho     = 'me';
+var editWho    = 'me';
+var editingId  = null;
+var listPage   = 1;
+var PER_PAGE   = 20;
+
+// Periodo de facturación: 19 del mes anterior al 18 del mes actual
+// sumPeriod = "YYYY-MM" del mes AL QUE PERTENECE el estado (el mes del día 19 de cierre)
+var sumPeriod  = currentPeriod();
+
+// ── periodo helpers ───────────────────────────────────────
+
+// Devuelve "YYYY-MM" del periodo activo hoy
+// El estado de "mes M" cubre del 19/(M-1) al 18/M
+// Si hoy >= 19 → estamos acumulando para el próximo estado → periodo = mes siguiente
+// Si hoy < 19  → aún en el periodo del mes actual
+function currentPeriod() {
+  var now = new Date();
+  var y = now.getFullYear(), m = now.getMonth()+1, d = now.getDate();
+  if (d >= 19) {
+    // ya pasó el corte, esto va al estado del mes siguiente
+    m += 1;
+    if (m > 12) { m = 1; y++; }
+  }
+  return y + '-' + String(m).padStart(2,'0');
+}
+
+// Fechas de inicio y fin del periodo "YYYY-MM"
+// Estado de mes M: desde 19/(M-1) hasta 18/M
+function periodRange(p) {
+  var parts = p.split('-'), y = parseInt(parts[0]), m = parseInt(parts[1]);
+  // inicio: 19 del mes anterior
+  var startM = m - 1, startY = y;
+  if (startM < 1) { startM = 12; startY--; }
+  var start = startY + '-' + String(startM).padStart(2,'0') + '-19';
+  // fin: 18 del mes actual
+  var end = y + '-' + String(m).padStart(2,'0') + '-18';
+  return { start: start, end: end };
+}
+
+// ¿Cae una fecha (string YYYY-MM-DD) en el periodo p?
+function inPeriod(dateStr, p) {
+  if (!dateStr) return false;
+  var d = typeof dateStr === 'string' ? dateStr : String(dateStr).slice(0,10);
+  var r = periodRange(p);
+  return d >= r.start && d <= r.end;
+}
+
+// Periodo de una fecha: a qué "YYYY-MM" pertenece
+function periodOfDate(dateStr) {
+  if (!dateStr) return '';
+  var d = typeof dateStr === 'string' ? dateStr : String(dateStr).slice(0,10);
+  var parts = d.split('-'), y = parseInt(parts[0]), m = parseInt(parts[1]), day = parseInt(parts[2]);
+  // si día >= 19, va al estado del mes siguiente
+  if (day >= 19) {
+    m += 1;
+    if (m > 12) { m = 1; y++; }
+  }
+  return y + '-' + String(m).padStart(2,'0');
+}
+
+function periodLabel(p) {
+  var months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var parts = p.split('-');
+  return 'Estado ' + months[parseInt(parts[1])-1] + ' ' + parts[0];
+}
+
+function periodDatesLabel(p) {
+  var r = periodRange(p);
+  return '19 ' + shortMonth(r.start) + ' al 18 ' + shortMonth(r.end);
+}
+
+function shortMonth(dateStr) {
+  var months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var m = parseInt(dateStr.split('-')[1]) - 1;
+  return months[m];
+}
+
+function addMonthsToPeriod(p, n) {
+  var parts = p.split('-').map(Number);
+  var d = new Date(parts[0], parts[1]-1+n, 1);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+
+// Cuota que cae en el mes calendario de vencimiento,
+// y ese mes pertenece al periodo p
+function cuotaForPeriod(e, p) {
+  if (!e.date) return 0;
+  var dateStr = typeof e.date === 'string' ? e.date : String(e.date).slice(0,10);
+  var c = e.cuotas || 1;
+  var vc = e.valorCuota || Math.round(e.amount / c);
+  var total = 0;
+  for (var i = 0; i < c; i++) {
+    // fecha de vencimiento de la cuota i (mismo día que la compra, +i meses)
+    var parts = dateStr.split('-');
+    var cy = parseInt(parts[0]), cm = parseInt(parts[1]), cd = parseInt(parts[2]);
+    var vDate = new Date(cy, cm-1+i, cd);
+    var vMonth = vDate.getFullYear() + '-' + String(vDate.getMonth()+1).padStart(2,'0');
+    // ¿ese mes calendario pertenece al periodo p?
+    // el mes M pertenece al periodo P si:
+    //   - las compras del 1-18/M van al estado M
+    //   - las compras del 19-31/M van al estado M+1
+    // Para cuotas usamos el mes calendario directamente como "estado del mismo mes"
+    if (vMonth === p) total += vc;
+  }
+  return total;
+}
+
+// Comprometido: cuotas futuras desde el periodo p en adelante
+function committedFromPeriod(e, p) {
+  if (!e.date) return 0;
+  var dateStr = typeof e.date === 'string' ? e.date : String(e.date).slice(0,10);
+  var c = e.cuotas || 1;
+  var vc = e.valorCuota || Math.round(e.amount / c);
+  var total = 0;
+  for (var i = 0; i < c; i++) {
+    var parts = dateStr.split('-');
+    var cy = parseInt(parts[0]), cm = parseInt(parts[1]), cd = parseInt(parts[2]);
+    var vDate = new Date(cy, cm-1+i, cd);
+    var vMonth = vDate.getFullYear() + '-' + String(vDate.getMonth()+1).padStart(2,'0');
+    if (vMonth >= p) total += vc;
+  }
+  return total;
+}
+
+// ── Excel data ────────────────────────────────────────────
+var EXCEL_DATA = [
+  {id:"1000002",date:"2025-10-03",desc:"Compra pasajes viaje Santiago",amount:547963,cuotas:1,who:"her",cat:"Viajes"},
+  {id:"1000003",date:"2025-10-04",desc:"Sodimac Navidad",amount:208890,cuotas:1,who:"her",cat:"Hogar"},
+  {id:"1000004",date:"2025-10-04",desc:"Totus compras varias",amount:54295,cuotas:1,who:"her",cat:"Supermercado"},
+  {id:"1000005",date:"2025-10-08",desc:"Aspiradora Osoji",amount:129990,cuotas:6,who:"her",cat:"Tecnología"},
+  {id:"1000006",date:"2025-10-08",desc:"Compra colchon cuna",amount:35990,cuotas:1,who:"me",cat:"Hogar"},
+  {id:"1000007",date:"2025-10-09",desc:"Accesorios casa Sodimac",amount:59770,cuotas:1,who:"her",cat:"Hogar"},
+  {id:"1000008",date:"2025-10-11",desc:"Compra coche Mercado Libre",amount:374499,cuotas:6,who:"me",cat:"Niños"},
+  {id:"1000009",date:"2025-10-05",desc:"Compra coche infanti (devuelto)",amount:479990,cuotas:12,who:"me",cat:"Niños"},
+  {id:"1000010",date:"2025-10-05",desc:"Compra accesorios infanti",amount:45960,cuotas:3,who:"me",cat:"Niños"},
+  {id:"1000011",date:"2025-10-19",desc:"Varios compra jumbo",amount:100084,cuotas:1,who:"her",cat:"Supermercado"},
+  {id:"1000012",date:"2025-10-19",desc:"Cuna infanti",amount:115880,cuotas:3,who:"me",cat:"Hogar"},
+  {id:"1000013",date:"2025-10-25",desc:"Reserva Palisade",amount:500000,cuotas:1,who:"her",cat:"Auto"},
+  {id:"1000014",date:"2025-10-23",desc:"Juego ropa cuna",amount:33990,cuotas:1,who:"her",cat:"Hogar"},
+  {id:"1000015",date:"2025-10-25",desc:"Barra chalaca (almuerzo Stgo)",amount:52995,cuotas:1,who:"me",cat:"Restaurante"},
+  {id:"1000016",date:"2025-10-30",desc:"Cena Tanta",amount:61880,cuotas:1,who:"me",cat:"Restaurante"},
+  {id:"1000017",date:"2025-10-31",desc:"Maquina ninja granizados",amount:339980,cuotas:1,who:"her",cat:"Tecnología"},
+  {id:"1000018",date:"2025-11-12",desc:"Compra alzador Victoria",amount:36990,cuotas:1,who:"me",cat:"Niños"},
+  {id:"1000019",date:"2025-11-14",desc:"Compra sodimac (arbol, adornos navidad)",amount:145130,cuotas:6,who:"her",cat:"Hogar"},
+  {id:"1000020",date:"2025-11-14",desc:"Ropa bebe falabella",amount:41440,cuotas:2,who:"her",cat:"Ropa"},
+  {id:"1000021",date:"2025-11-14",desc:"Medicamentos Cruz Verde",amount:38868,cuotas:1,who:"me",cat:"Salud"},
+  {id:"1000022",date:"2025-11-15",desc:"Compra tabla planchar",amount:58436,cuotas:1,who:"her",cat:"Hogar"},
+  {id:"1000023",date:"2025-11-15",desc:"Compra ropa bebe y navidad Falabella",amount:80940,cuotas:3,who:"her",cat:"Ropa"},
+  {id:"1000024",date:"2025-11-22",desc:"Compra casco y rodilleras",amount:37980,cuotas:1,who:"me",cat:"Niños"},
+  {id:"1000025",date:"2025-11-25",desc:"Botas presoterapia",amount:399990,cuotas:6,who:"her",cat:"Salud"},
+  {id:"1000026",date:"2025-11-25",desc:"Compra easy varios",amount:72122,cuotas:3,who:"her",cat:"Hogar"},
+  {id:"1000027",date:"2025-11-25",desc:"Compra jumbo varios",amount:85116,cuotas:3,who:"her",cat:"Supermercado"},
+  {id:"1000028",date:"2025-11-27",desc:"Compra falabella",amount:77000,cuotas:3,who:"her",cat:"Ropa"},
+  {id:"1000029",date:"2025-11-27",desc:"Tanta",amount:39550,cuotas:1,who:"me",cat:"Restaurante"},
+  {id:"1000030",date:"2025-11-28",desc:"LA polar Iphone",amount:1429990,cuotas:1,who:"me",cat:"Tecnología"},
+  {id:"1000031",date:"2025-12-04",desc:"Mercado Pago Soy momo",amount:125848,cuotas:3,who:"me",cat:"Otro"},
+  {id:"1000039",date:"2025-12-01",desc:"Coche maxicosi",amount:329990,cuotas:1,who:"me",cat:"Niños"},
+  {id:"1000040",date:"2026-01-02",desc:"Ashley bergere",amount:439980,cuotas:6,who:"her",cat:"Hogar"},
+  {id:"1000032",date:"2026-01-15",desc:"Seguro Auto",amount:103073,cuotas:1,who:"me",cat:"Auto"},
+  {id:"1000033",date:"2026-01-15",desc:"Compra bimba y lola",amount:70000,cuotas:1,who:"me",cat:"Ropa"},
+  {id:"1000034",date:"2026-01-15",desc:"Bath & Body",amount:71953,cuotas:6,who:"her",cat:"Ropa"},
+  {id:"1000035",date:"2026-01-15",desc:"Paris",amount:49490,cuotas:3,who:"her",cat:"Ropa"},
+  {id:"1000036",date:"2026-01-15",desc:"Lentes de sol",amount:227350,cuotas:3,who:"shared",cat:"Ropa"},
+  {id:"1000037",date:"2026-01-15",desc:"Compra refri",amount:112980,cuotas:1,who:"her",cat:"Hogar"},
+  {id:"1000038",date:"2026-01-15",desc:"Toallitas humedas",amount:49980,cuotas:1,who:"her",cat:"Otro"},
+  {id:"1000049",date:"2026-01-20",desc:"Compra apple carplay",amount:29994,cuotas:3,who:"me",cat:"Tecnología"},
+  {id:"1000046",date:"2026-01-24",desc:"Compra zapatos Bimba y lola",amount:84500,cuotas:3,who:"me",cat:"Ropa"},
+  {id:"1000050",date:"2026-01-24",desc:"Compra mochila Rebeca",amount:34990,cuotas:3,who:"me",cat:"Niños"},
+  {id:"1000041",date:"2026-02-02",desc:"Compra juegos Zofri",amount:97800,cuotas:3,who:"me",cat:"Viajes"},
+  {id:"1000042",date:"2026-02-02",desc:"Compra ipad mini",amount:565000,cuotas:6,who:"her",cat:"Tecnología"},
+  {id:"1000043",date:"2026-02-02",desc:"Compra victorinox",amount:63700,cuotas:3,who:"me",cat:"Deporte"},
+  {id:"1000044",date:"2026-02-03",desc:"Compra ipad air",amount:610000,cuotas:12,who:"me",cat:"Tecnología"},
+  {id:"1000054",date:"2026-02-06",desc:"Desodorante y afiladores ML",amount:50483,cuotas:1,who:"me",cat:"Supermercado"},
+  {id:"1000058",date:"2026-02-21",desc:"Sillas sodimac",amount:82940,cuotas:1,who:"her",cat:"Hogar"},
+  {id:"1000063",date:"2026-02-27",desc:"Camisa Andesgear",amount:59980,cuotas:1,who:"shared",cat:"Ropa"},
+  {id:"1000062",date:"2026-03-12",desc:"Pasajes La Serena",amount:457443,cuotas:1,who:"shared",cat:"Viajes"},
+  {id:"1000059",date:"2026-03-15",desc:"Lentes Felipe",amount:162312,cuotas:1,who:"shared",cat:"Salud"},
+  {id:"1000061",date:"2026-03-15",desc:"Cubre sofa canon",amount:37592,cuotas:1,who:"shared",cat:"Hogar"},
+  {id:"1000060",date:"2026-03-17",desc:"Lentes Victoria",amount:135944,cuotas:1,who:"shared",cat:"Salud"},
+  {id:"1000069",date:"2026-03-29",desc:"Permiso de circulacion",amount:898464,cuotas:1,who:"shared",cat:"Auto"},
+  {id:"1000067",date:"2026-04-10",desc:"Compra falabella chaqueta dorada",amount:34990,cuotas:1,who:"shared",cat:"Ropa"},
+  {id:"1000068",date:"2026-04-10",desc:"Compra falabella regalo abu",amount:56890,cuotas:1,who:"shared",cat:"Ropa"},
+  {id:"1000071",date:"2026-04-13",desc:"Vacunas Rebeca",amount:172000,cuotas:1,who:"shared",cat:"Salud"},
+  {id:"1000072",date:"2026-04-14",desc:"Compra H&M",amount:72960,cuotas:1,who:"shared",cat:"Ropa"},
+  {id:"1000070",date:"2026-04-18",desc:"Compra Surprise",amount:77970,cuotas:1,who:"shared",cat:"Niños"},
+  {id:"1000078",date:"2026-04-25",desc:"Vicenta",amount:78870,cuotas:1,who:"shared",cat:"Niños"},
+  {id:"1000073",date:"2026-05-07",desc:"Leche Rebeca",amount:149940,cuotas:1,who:"me",cat:"Supermercado"},
+  {id:"1000074",date:"2026-05-15",desc:"Lentes Maca",amount:131917,cuotas:1,who:"her",cat:"Salud"},
+  {id:"1000075",date:"2026-05-17",desc:"Pijama Rebeca",amount:20990,cuotas:1,who:"her",cat:"Ropa"},
+  {id:"1000076",date:"2026-05-17",desc:"Pijama Victoria",amount:13990,cuotas:1,who:"her",cat:"Ropa"},
+  {id:"1000073b",date:"2026-05-20",desc:"Ropa ninas",amount:18980,cuotas:1,who:"her",cat:"Ropa"}
+];
+
+// ── format helpers ────────────────────────────────────────
+function fmt(n){ return '$'+Math.round(n).toLocaleString('es-CL'); }
+function fmtK(n){ return n>=1000000?'$'+(n/1000000).toFixed(1)+'M':n>=1000?'$'+Math.round(n/1000)+'K':'$'+Math.round(n); }
+function fmtDate(d){
+  var s = typeof d === 'string' ? d : String(d).slice(0,10);
+  var p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0];
+}
+
+// ── init ─────────────────────────────────────────────────
+function init(){
+  try{ var s=JSON.parse(localStorage.getItem('cmr_cfg')||'{}'); SCRIPT_URL=s.url||''; TOKEN=s.token||''; }catch(e){}
+  document.getElementById('cfg-url').value=SCRIPT_URL;
+  document.getElementById('cfg-token').value=TOKEN;
+  document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
+  selectWho('add','me');
+  updateStatusBar(); updateLockBadge();
+  if(SCRIPT_URL&&TOKEN) syncNow();
+}
+
+function saveConfig(){ SCRIPT_URL=document.getElementById('cfg-url').value.trim(); TOKEN=document.getElementById('cfg-token').value.trim(); localStorage.setItem('cmr_cfg',JSON.stringify({url:SCRIPT_URL,token:TOKEN})); }
+function clearConfig(){ if(!confirm('¿Borrar configuración local?')) return; localStorage.removeItem('cmr_cfg'); SCRIPT_URL=''; TOKEN=''; document.getElementById('cfg-url').value=''; document.getElementById('cfg-token').value=''; updateStatusBar(); updateLockBadge(); }
+function toggleToken(){ var el=document.getElementById('cfg-token'); el.type=el.type==='password'?'text':'password'; }
+function updateLockBadge(){ var el=document.getElementById('lock-status'); el.innerHTML=TOKEN?'<span class="lock-badge">🔒 Token configurado</span>':'<span style="font-size:12px;color:var(--danger)">⚠️ Sin token</span><br><br>'; }
+async function saveAndTest(){ saveConfig(); updateLockBadge(); if(!SCRIPT_URL){ toast('Pega la URL primero'); return; } toast('Probando…'); try{ var r=await fetch(SCRIPT_URL+'?action=list&token='+encodeURIComponent(TOKEN)); var d=await r.json(); if(d.expenses!==undefined){ expenses=d.expenses; updateStatusBar(); toast('✓ Conexión exitosa · '+d.expenses.length+' gastos'); } else if(d.error==='No autorizado') toast('❌ Token incorrecto'); else toast('Error: '+JSON.stringify(d)); }catch(e){ toast('Error de red: '+e.message); } }
+
+function updateStatusBar(){ var dot=document.getElementById('sdot'),txt=document.getElementById('stxt'); if(!dot||!txt) return; if(!SCRIPT_URL){ dot.className='sdot didle'; txt.textContent='Sin configurar · Ve a Config'; } else if(!TOKEN){ dot.className='sdot derr'; txt.textContent='Sin token · configura en Config'; } else if(expenses.length>0){ dot.className='sdot dok'; txt.textContent='🔒 Conectado · '+expenses.length+' gastos'; } else{ dot.className='sdot dsync'; txt.textContent='Conectando…'; } }
+
+// ── tabs ─────────────────────────────────────────────────
+function showTab(t){ var tabs=['add','list','summary','config']; document.querySelectorAll('.tab').forEach(function(el,i){ el.classList.toggle('active',tabs[i]===t); }); document.querySelectorAll('.tab-content').forEach(function(el){ el.style.display='none'; }); document.getElementById('tab-'+t).style.display='block'; if(t==='list'){ listPage=1; renderList(); } if(t==='summary') renderSummary(); }
+
+// ── who selector ─────────────────────────────────────────
+function selectWho(ctx,who){ if(ctx==='add') addWho=who; else editWho=who; var cid=ctx==='add'?'add-who':'edit-who'; document.querySelectorAll('#'+cid+' .who-btn').forEach(function(b){ b.className='who-btn'; if(b.dataset.who===who) b.classList.add('sel-'+who); }); }
+
+// ── cuota logic ───────────────────────────────────────────
+function onCuotasChange(){ var n=parseInt(document.getElementById('f-cuotas').value),show=n>1; document.getElementById('fg-cuota-val').style.display=show?'block':'none'; document.getElementById('fg-cuota-total').style.display=show?'block':'none'; if(show) calcDefaultCuota('f'); else document.getElementById('cuota-hint').classList.remove('visible'); }
+function onAmountChange(){ if(parseInt(document.getElementById('f-cuotas').value)>1) calcDefaultCuota('f'); }
+function onCuotaValChange(){ recalcHint('f'); }
+function onEditCuotasChange(){ var n=parseInt(document.getElementById('e-cuotas').value),show=n>1; document.getElementById('e-fg-cuota-val').style.display=show?'block':'none'; document.getElementById('e-fg-cuota-total').style.display=show?'block':'none'; if(show) calcDefaultCuota('e'); else document.getElementById('e-cuota-hint').classList.remove('visible'); }
+function onEditAmountChange(){ if(parseInt(document.getElementById('e-cuotas').value)>1) calcDefaultCuota('e'); }
+function onEditCuotaValChange(){ recalcHint('e'); }
+function calcDefaultCuota(p){ var total=parseInt(document.getElementById(p+'-amount').value)||0,n=parseInt(document.getElementById(p+'-cuotas').value)||1; if(total>0&&n>1){ var def=Math.round(total/n); document.getElementById(p+'-cuota-val').value=def; document.getElementById(p+'-cuota-total').value=def*n; showHint(p,def,n,total); } }
+function recalcHint(p){ var vc=parseInt(document.getElementById(p+'-cuota-val').value)||0,n=parseInt(document.getElementById(p+'-cuotas').value)||1,total=parseInt(document.getElementById(p+'-amount').value)||0; document.getElementById(p+'-cuota-total').value=vc*n||''; showHint(p,vc,n,total); }
+function showHint(p,vc,n,totalOrig){ var hid=p==='f'?'cuota-hint':'e-cuota-hint',hint=document.getElementById(hid); if(!vc){ hint.classList.remove('visible'); return; } var tr=vc*n,diff=tr-totalOrig; var msg='<strong>'+fmt(vc)+'</strong>/mes × '+n+' = <strong>'+fmt(tr)+'</strong>'; if(diff>0) msg+=' <span style="color:var(--danger)">(+'+fmt(diff)+' intereses)</span>'; hint.innerHTML=msg; hint.classList.add('visible'); }
+
+// ── drawer ───────────────────────────────────────────────
+function openDrawer(expense){
+  editingId=expense.id;
+  var c=expense.cuotas||1,vc=expense.valorCuota||Math.round(expense.amount/c);
+  var dateStr = typeof expense.date==='string' ? expense.date : String(expense.date).slice(0,10);
+  document.getElementById('e-amount').value=expense.amount;
+  document.getElementById('e-date').value=dateStr;
+  document.getElementById('e-cuotas').value=c;
+  document.getElementById('e-cat').value=expense.cat||'Otro';
+  document.getElementById('e-desc').value=expense.desc||'';
+  selectWho('edit',expense.who||'me');
+  onEditCuotasChange();
+  if(c>1){ document.getElementById('e-cuota-val').value=vc; document.getElementById('e-cuota-total').value=vc*c; showHint('e',vc,c,expense.amount); }
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+function closeDrawer(){ document.getElementById('overlay').classList.remove('open'); document.getElementById('drawer').classList.remove('open'); editingId=null; }
+function openDrawerById(id){ var e=expenses.find(function(x){ return String(x.id)===String(id); }); if(e) openDrawer(e); }
+
+async function saveEdit(){
+  var amount=parseInt(document.getElementById('e-amount').value),date=document.getElementById('e-date').value,cat=document.getElementById('e-cat').value,desc=document.getElementById('e-desc').value.trim(),cuotas=parseInt(document.getElementById('e-cuotas').value)||1,valorCuota=cuotas>1?(parseInt(document.getElementById('e-cuota-val').value)||Math.round(amount/cuotas)):amount;
+  if(!amount||amount<=0){ toast('Monto inválido'); return; }
+  if(!date){ toast('Selecciona una fecha'); return; }
+  var btn=document.getElementById('drawer-save-btn'); btn.disabled=true; btn.textContent='Guardando…';
+  try{ var d=await apiPost({action:'edit',id:editingId,amount,date,desc,cat,who:editWho,cuotas,valorCuota}); if(d.success){ toast('Gasto actualizado ✓'); closeDrawer(); await syncNow(); renderList(); } else toast('Error: '+(d.error||'desconocido')); }catch(e){ toast('Error: '+e.message); }
+  btn.disabled=false; btn.textContent='Guardar cambios';
+}
+async function deleteFromDrawer(){ if(!confirm('¿Eliminar este gasto?')) return; try{ var d=await apiPost({action:'delete',id:String(editingId)}); if(d.success){ toast('Eliminado'); closeDrawer(); await syncNow(); renderList(); } else toast('Error al eliminar'); }catch(e){ toast('Error: '+e.message); } }
+
+// ── API ──────────────────────────────────────────────────
+function apiPost(body){ body.token=TOKEN; return fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)}).then(function(r){ return r.json(); }); }
+function syncNow(){ if(!SCRIPT_URL||!TOKEN) return Promise.resolve(); var btn=document.getElementById('sync-btn'); if(btn) btn.classList.add('syncing'); return fetch(SCRIPT_URL+'?action=list&token='+encodeURIComponent(TOKEN)).then(function(r){ return r.json(); }).then(function(d){ if(d.expenses){ expenses=d.expenses; updateStatusBar(); } if(btn) btn.classList.remove('syncing'); }).catch(function(){ if(btn) btn.classList.remove('syncing'); }); }
+
+async function addExpense(){
+  var amount=parseInt(document.getElementById('f-amount').value),date=document.getElementById('f-date').value,cat=document.getElementById('f-cat').value,desc=document.getElementById('f-desc').value.trim(),cuotas=parseInt(document.getElementById('f-cuotas').value)||1,valorCuota=cuotas>1?(parseInt(document.getElementById('f-cuota-val').value)||Math.round(amount/cuotas)):amount;
+  if(!amount||amount<=0){ toast('Ingresa un monto válido'); return; }
+  if(!date){ toast('Selecciona una fecha'); return; }
+  if(!SCRIPT_URL||!TOKEN){ toast('Configura URL y token en Config'); return; }
+  var btn=document.getElementById('submit-btn'); btn.disabled=true; btn.textContent='Guardando…';
+  try{ var d=await apiPost({action:'add',amount,date,desc:desc||cat,cat,who:addWho,cuotas,valorCuota}); if(d.success){ toast('Gasto guardado ✓'); document.getElementById('f-amount').value=''; document.getElementById('f-desc').value=''; document.getElementById('f-cuotas').value='1'; onCuotasChange(); await syncNow(); } else toast('Error: '+(d.error||'desconocido')); }catch(e){ toast('Error: '+e.message); }
+  btn.disabled=false; btn.textContent='Registrar gasto';
+}
+
+async function importFromExcel(){ if(!SCRIPT_URL||!TOKEN){ toast('Configura URL y token primero'); return; } if(!confirm('¿Importar los gastos del Excel? Solo agrega los que no existan.')) return; toast('Importando…'); try{ var d=await apiPost({action:'import',expenses:EXCEL_DATA}); if(d.success){ toast('Importados: '+d.added+' gastos nuevos'); await syncNow(); } else toast('Error: '+d.error); }catch(e){ toast('Error: '+e.message); } }
+
+// ── list ─────────────────────────────────────────────────
+function renderList(){
+  var fP=document.getElementById('fl-period').value, fW=document.getElementById('fl-who').value, fC=document.getElementById('fl-cat').value;
+
+  // build period list from expenses
+  var periods=[...new Set(expenses.map(function(e){ return periodOfDate(e.date); }))].filter(Boolean).sort().reverse();
+  var pSel=document.getElementById('fl-period'),curP=pSel.value;
+  pSel.innerHTML='<option value="">Todos los periodos</option>'+periods.map(function(p){ return '<option value="'+p+'"'+(p===curP?' selected':'')+'>'+periodLabel(p)+'</option>'; }).join('');
+
+  var cats=[...new Set(expenses.map(function(e){ return e.cat; }))].filter(Boolean).sort();
+  var cSel=document.getElementById('fl-cat'),curC=cSel.value;
+  cSel.innerHTML='<option value="">Todas</option>'+cats.map(function(c){ return '<option value="'+c+'"'+(c===curC?' selected':'')+'>'+c+'</option>'; }).join('');
+
+  var filtered=expenses;
+  if(fP) filtered=filtered.filter(function(e){ return periodOfDate(e.date)===fP; });
+  if(fW) filtered=filtered.filter(function(e){ return e.who===fW; });
+  if(fC) filtered=filtered.filter(function(e){ return e.cat===fC; });
+
+  var total=filtered.length,pages=Math.max(1,Math.ceil(total/PER_PAGE));
+  if(listPage>pages) listPage=pages;
+  var paged=filtered.slice((listPage-1)*PER_PAGE,listPage*PER_PAGE);
+  var el=document.getElementById('expense-list');
+  if(!filtered.length){ el.innerHTML='<div class="empty">🧾<br>Sin gastos</div>'; document.getElementById('pagination').innerHTML=''; return; }
+
+  el.innerHTML=paged.map(function(e){
+    var wl=e.who==='me'?'Felipe':e.who==='her'?'Maca':'Compartido';
+    var bc=e.who==='me'?'bme':e.who==='her'?'bher':'bshared';
+    var c=e.cuotas||1,vc=e.valorCuota||Math.round(e.amount/c);
+    var cuotaLine=c>1?'<span class="ecuota"> · '+fmt(vc)+'/mes × '+c+'c</span>':'';
+    var dateStr=typeof e.date==='string'?e.date:String(e.date).slice(0,10);
+    var pBadge=periodLabel(periodOfDate(dateStr));
+    return '<div class="eitem" onclick="openDrawerById(\''+e.id+'\')">'+
+      '<span class="wbadge '+bc+'">'+wl+'</span>'+
+      '<div class="einfo"><div class="edesc">'+e.desc+'</div>'+
+      '<div class="emeta">'+e.cat+cuotaLine+' · <span style="color:var(--muted)">'+pBadge+'</span></div></div>'+
+      '<div class="eright"><div class="eamt">'+(c>1?fmt(vc)+'/m':fmt(e.amount))+'</div>'+
+      '<div class="edate">'+fmtDate(dateStr)+'</div></div>'+
+      '<span class="edit-icon">✎</span></div>';
+  }).join('');
+
+  var pg=document.getElementById('pagination');
+  pg.innerHTML=pages>1?
+    '<button class="pbtn" onclick="changePage(-1)" '+(listPage===1?'disabled':'')+'>‹</button>'+
+    '<span>'+listPage+' / '+pages+'</span>'+
+    '<button class="pbtn" onclick="changePage(1)" '+(listPage===pages?'disabled':'')+'>›</button>':
+    '<span>'+total+' gastos</span>';
+}
+function changePage(dir){ listPage+=dir; renderList(); }
+
+// ── summary ───────────────────────────────────────────────
+function renderSummary(){
+  var p=sumPeriod;
+  var r=periodRange(p);
+  document.getElementById('sum-period-name').textContent=periodLabel(p);
+  document.getElementById('sum-period-dates').textContent='19 '+shortMonth(r.start)+' al 18 '+shortMonth(r.end)+' · '+r.start.slice(0,4);
+
+  // gastos del periodo (compras cuya fecha cae en el rango 19→18)
+  var periodExpenses=expenses.filter(function(e){ return inPeriod(e.date,p); });
+
+  // totales por dueño: compras directas + cuotas que vencen en el mes del periodo
+  var totMe=0,totHer=0,totShared=0,nMe=0,nHer=0,nShared=0,catMap={};
+
+  // 1. Compras sin cuotas (o cuotas=1) que caen en el periodo → monto completo
+  // 2. Compras en cuotas que caen en el periodo → valorCuota (primera cuota)
+  // 3. Cuotas de compras anteriores que vencen en el mes p → cuotaForPeriod
+  expenses.forEach(function(e){
+    var c=e.cuotas||1, vc=e.valorCuota||Math.round(e.amount/c);
+    var contribution=0;
+    if(c===1){
+      // gasto contado: solo si cae en el periodo
+      if(inPeriod(e.date,p)) contribution=e.amount;
+    } else {
+      // gasto en cuotas: aporta cuotaForPeriod (cuotas cuyo mes calendario = p)
+      contribution=cuotaForPeriod(e,p);
+    }
+    if(!contribution) return;
+    if(!catMap[e.cat]) catMap[e.cat]={me:0,her:0,shared:0};
+    if(e.who==='me'){    totMe+=contribution;     nMe++;     catMap[e.cat].me+=contribution; }
+    else if(e.who==='her'){totHer+=contribution;  nHer++;    catMap[e.cat].her+=contribution; }
+    else{                 totShared+=contribution; nShared++; catMap[e.cat].shared+=contribution; }
+  });
+
+  document.getElementById('metrics-period').innerHTML=
+    mc('Felipe',fmt(totMe),nMe+' items','me')+
+    mc('Maca',fmt(totHer),nHer+' items','her')+
+    mc('Compartido',fmt(totShared),nShared+' items','shared');
+
+  // comprometido futuro
+  var commMe=0,commHer=0,commShared=0;
+  expenses.forEach(function(e){
+    var r=committedFromPeriod(e,p);
+    if(e.who==='me') commMe+=r; else if(e.who==='her') commHer+=r; else commShared+=r;
+  });
+  var commTotal=commMe+commHer+commShared;
+  document.getElementById('committed-banner').style.display=commTotal>0?'flex':'none';
+  if(commTotal>0){ document.getElementById('committed-val').textContent=fmt(commTotal); document.getElementById('committed-sub').textContent='Felipe '+fmt(commMe)+'  ·  Maca '+fmt(commHer)+'  ·  Comp. '+fmt(commShared); }
+
+  // cat table
+  var cats=Object.entries(catMap).sort(function(a,b){ return (b[1].me+b[1].her+b[1].shared)-(a[1].me+a[1].her+a[1].shared); });
+  var ct=document.getElementById('cat-table');
+  ct.innerHTML='<div class="crow header"><span>Categoría</span><span class="cv" style="color:var(--me)">Felipe</span><span class="cv" style="color:var(--her)">Maca</span><span class="cv" style="color:var(--shared)">Comp.</span></div>';
+  if(!cats.length){ ct.innerHTML+='<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Sin gastos en este periodo</div>'; }
+  else cats.forEach(function(x){ var v=x[1]; ct.innerHTML+='<div class="crow"><span>'+x[0]+'</span><span class="cv">'+(v.me?fmtK(v.me):'—')+'</span><span class="cv">'+(v.her?fmtK(v.her):'—')+'</span><span class="cv">'+(v.shared?fmtK(v.shared):'—')+'</span></div>'; });
+
+  // balance
+  var half=totShared/2, diff=totMe-totHer;
+  document.getElementById('bamt').textContent=fmt(Math.abs(diff));
+  document.getElementById('bdesc').textContent=
+    diff>0?'Felipe tiene '+fmt(diff)+' más en gastos propios. Cada uno aporta su mitad de los compartidos: '+fmt(half)+'.':
+    diff<0?'Maca tiene '+fmt(Math.abs(diff))+' más en gastos propios. Cada uno aporta su mitad de los compartidos: '+fmt(half)+'.':
+    'Gastos propios iguales. Cada uno aporta su mitad de los compartidos: '+fmt(half)+'.';
+}
+
+function mc(label,val,count,cls){ return '<div class="mcard"><div class="mlabel">'+label+'</div><div class="mval '+cls+'">'+val+'</div><div class="mcount">'+count+'</div></div>'; }
+function changePeriod(dir){ sumPeriod=addMonthsToPeriod(sumPeriod,dir); renderSummary(); }
+
+function toast(msg){ var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(function(){ t.classList.remove('show'); },2500); }
+
+init();
+</script>
+</body>
+</html>

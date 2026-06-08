@@ -382,7 +382,7 @@ function periodRange(p) {
 // ¿Cae una fecha (string YYYY-MM-DD) en el periodo p?
 function inPeriod(dateStr, p) {
   if (!dateStr) return false;
-  var d = typeof dateStr === 'string' ? dateStr : String(dateStr).slice(0,10);
+  var d = toISODate(dateStr);
   var r = periodRange(p);
   return d >= r.start && d <= r.end;
 }
@@ -390,7 +390,7 @@ function inPeriod(dateStr, p) {
 // Periodo de una fecha: a qué "YYYY-MM" pertenece
 function periodOfDate(dateStr) {
   if (!dateStr) return '';
-  var d = typeof dateStr === 'string' ? dateStr : String(dateStr).slice(0,10);
+  var d = toISODate(dateStr);
   var parts = d.split('-'), y = parseInt(parts[0]), m = parseInt(parts[1]), day = parseInt(parts[2]);
   // si día >= 19, va al estado del mes siguiente
   if (day >= 19) {
@@ -427,7 +427,7 @@ function addMonthsToPeriod(p, n) {
 // y ese mes pertenece al periodo p
 function cuotaForPeriod(e, p) {
   if (!e.date) return 0;
-  var dateStr = typeof e.date === 'string' ? e.date : String(e.date).slice(0,10);
+  var dateStr = toISODate(e.date);
   var c = e.cuotas || 1;
   var vc = e.valorCuota || Math.round(e.amount / c);
   var total = 0;
@@ -450,7 +450,7 @@ function cuotaForPeriod(e, p) {
 // Comprometido: cuotas futuras desde el periodo p en adelante
 function committedFromPeriod(e, p) {
   if (!e.date) return 0;
-  var dateStr = typeof e.date === 'string' ? e.date : String(e.date).slice(0,10);
+  var dateStr = toISODate(e.date);
   var c = e.cuotas || 1;
   var vc = e.valorCuota || Math.round(e.amount / c);
   var total = 0;
@@ -536,9 +536,34 @@ var EXCEL_DATA = [
 // ── format helpers ────────────────────────────────────────
 function fmt(n){ return '$'+Math.round(n).toLocaleString('es-CL'); }
 function fmtK(n){ return n>=1000000?'$'+(n/1000000).toFixed(1)+'M':n>=1000?'$'+Math.round(n/1000)+'K':'$'+Math.round(n); }
-function fmtDate(d){
-  var s = typeof d === 'string' ? d : String(d).slice(0,10);
-  var p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0];
+
+// Convierte cualquier formato de fecha a YYYY-MM-DD
+// Acepta: "2026-05-17", "17/05/2026", "05/17/2026", numero serial Sheets
+function toISODate(d) {
+  if (!d) return '';
+  // numero serial de Sheets (dias desde 30/12/1899)
+  if (typeof d === 'number') {
+    var ms = (d - 25569) * 86400 * 1000;
+    var dt = new Date(ms);
+    return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+  }
+  var s = String(d).trim();
+  // ya esta en formato ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  // formato DD/MM/YYYY
+  var dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dmy) return dmy[3] + '-' + dmy[2].padStart(2,'0') + '-' + dmy[1].padStart(2,'0');
+  // formato MM/DD/YYYY (fallback)
+  var mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (mdy) return mdy[3] + '-' + mdy[1].padStart(2,'0') + '-' + mdy[2].padStart(2,'0');
+  return s.slice(0,10);
+}
+
+function fmtDate(d) {
+  var s = toISODate(d);
+  if (!s) return '';
+  var p = s.split('-');
+  return p[2]+'/'+p[1]+'/'+p[0];
 }
 
 // ── init ─────────────────────────────────────────────────
@@ -581,7 +606,7 @@ function showHint(p,vc,n,totalOrig){ var hid=p==='f'?'cuota-hint':'e-cuota-hint'
 function openDrawer(expense){
   editingId=expense.id;
   var c=expense.cuotas||1,vc=expense.valorCuota||Math.round(expense.amount/c);
-  var dateStr = typeof expense.date==='string' ? expense.date : String(expense.date).slice(0,10);
+  var dateStr = toISODate(expense.date);
   document.getElementById('e-amount').value=expense.amount;
   document.getElementById('e-date').value=dateStr;
   document.getElementById('e-cuotas').value=c;
@@ -649,14 +674,42 @@ function renderList(){
   el.innerHTML=paged.map(function(e){
     var wl=e.who==='me'?'Felipe':e.who==='her'?'Maca':'Compartido';
     var bc=e.who==='me'?'bme':e.who==='her'?'bher':'bshared';
-    var c=e.cuotas||1,vc=e.valorCuota||Math.round(e.amount/c);
-    var cuotaLine=c>1?'<span class="ecuota"> · '+fmt(vc)+'/mes × '+c+'c</span>':'';
-    var dateStr=typeof e.date==='string'?e.date:String(e.date).slice(0,10);
+    var c=e.cuotas||1, vc=e.valorCuota||Math.round(e.amount/c);
+    var dateStr=toISODate(e.date);
     var pBadge=periodLabel(periodOfDate(dateStr));
+
+    // categoria segura (evita timestamps)
+    var safeCat=(e.cat && e.cat.length<30 && !/^\d{4}-\d{2}/.test(e.cat))?e.cat:'Otro';
+
+    // descripcion segura (evita timestamps como nombre)
+    var safeDesc=(e.desc && e.desc.length<60 && !/^\d{4}-\d{2}/.test(e.desc))?e.desc:safeCat;
+
+    // estado de cuotas
+    var cuotaStatus='';
+    if(c>1){
+      // calcular cuantas cuotas ya pasaron
+      var parts=dateStr.split('-');
+      var cy=parseInt(parts[0]),cm=parseInt(parts[1]),cd=parseInt(parts[2]);
+      var now=new Date();
+      var nowMonth=now.getFullYear()*12+now.getMonth();
+      var paid=0;
+      for(var i=0;i<c;i++){
+        var vd=new Date(cy,cm-1+i,cd);
+        var vMonth=vd.getFullYear()*12+vd.getMonth();
+        if(vMonth<=nowMonth) paid++;
+      }
+      var remaining=c-paid;
+      if(remaining<=0){
+        cuotaStatus='<span style="background:#EAF3DE;color:#3B6D11;font-size:10px;font-weight:600;padding:2px 6px;border-radius:10px;margin-left:4px">✓ Pagado</span>';
+      } else {
+        cuotaStatus='<span style="background:#FFF3E0;color:#854F0B;font-size:10px;font-weight:600;padding:2px 6px;border-radius:10px;margin-left:4px">'+paid+'/'+c+' · faltan '+remaining+'</span>';
+      }
+    }
+
     return '<div class="eitem" onclick="openDrawerById(\''+e.id+'\')">'+
       '<span class="wbadge '+bc+'">'+wl+'</span>'+
-      '<div class="einfo"><div class="edesc">'+e.desc+'</div>'+
-      '<div class="emeta">'+e.cat+cuotaLine+' · <span style="color:var(--muted)">'+pBadge+'</span></div></div>'+
+      '<div class="einfo"><div class="edesc">'+safeDesc+'</div>'+
+      '<div class="emeta">'+safeCat+(c>1?' · '+fmt(vc)+'/mes':'')+cuotaStatus+'</div></div>'+
       '<div class="eright"><div class="eamt">'+(c>1?fmt(vc)+'/m':fmt(e.amount))+'</div>'+
       '<div class="edate">'+fmtDate(dateStr)+'</div></div>'+
       '<span class="edit-icon">✎</span></div>';
@@ -698,10 +751,12 @@ function renderSummary(){
       contribution=cuotaForPeriod(e,p);
     }
     if(!contribution) return;
-    if(!catMap[e.cat]) catMap[e.cat]={me:0,her:0,shared:0};
-    if(e.who==='me'){    totMe+=contribution;     nMe++;     catMap[e.cat].me+=contribution; }
-    else if(e.who==='her'){totHer+=contribution;  nHer++;    catMap[e.cat].her+=contribution; }
-    else{                 totShared+=contribution; nShared++; catMap[e.cat].shared+=contribution; }
+    // cat seguro: evita que timestamps o valores vacios aparezcan como categoria
+    var safeCat = (e.cat && e.cat.length < 30 && !/^\d{4}-\d{2}/.test(e.cat)) ? e.cat : 'Otro';
+    if(!catMap[safeCat]) catMap[safeCat]={me:0,her:0,shared:0};
+    if(e.who==='me'){    totMe+=contribution;     nMe++;     catMap[safeCat].me+=contribution; }
+    else if(e.who==='her'){totHer+=contribution;  nHer++;    catMap[safeCat].her+=contribution; }
+    else{                 totShared+=contribution; nShared++; catMap[safeCat].shared+=contribution; }
   });
 
   document.getElementById('metrics-period').innerHTML=

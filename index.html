@@ -159,8 +159,17 @@ body{font-family:var(--font);background:#f5f5f7;min-height:100vh;max-width:480px
       <div class="form-row">
         <div class="fg"><label>Monto total ($)</label>
           <input type="number" id="f-amount" placeholder="0" inputmode="numeric" oninput="onAmountChange()"></div>
-        <div class="fg"><label>Fecha</label>
-          <input type="date" id="f-date"></div>
+        <div class="fg"><label>Fecha de compra</label>
+          <input type="date" id="f-date" onchange="syncBillingDate()"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg">
+          <label>Fecha de cobro <span style="color:var(--me);font-size:10px">determina el periodo</span></label>
+          <input type="date" id="f-billing">
+        </div>
+        <div class="fg" style="display:flex;align-items:flex-end">
+          <button type="button" onclick="copyDateToBilling()" style="width:100%;padding:10px 8px;border:1px solid var(--border);border-radius:8px;background:#fafafa;font-size:12px;cursor:pointer;color:var(--muted)">= misma que compra</button>
+        </div>
       </div>
       <div class="form-row triple" style="margin-bottom:4px">
         <div class="fg"><label>Cuotas</label>
@@ -226,6 +235,10 @@ body{font-family:var(--font);background:#f5f5f7;min-height:100vh;max-width:480px
 
     <div class="slabel">Gastos del periodo</div>
     <div class="metrics" id="metrics-period"></div>
+    <div id="total-card" style="background:white;border-radius:var(--radius);padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:var(--muted)">Total del periodo</span>
+      <span style="font-size:20px;font-weight:700" id="total-period">$0</span>
+    </div>
 
     <div class="committed-banner" id="committed-banner" style="display:none">
       <div class="cb-left">💳 Cuotas comprometidas futuras<br><span style="font-size:11px">desde este periodo en adelante</span></div>
@@ -244,6 +257,17 @@ body{font-family:var(--font);background:#f5f5f7;min-height:100vh;max-width:480px
       <div class="btitle">Balance del periodo</div>
       <div class="bamt" id="bamt">$0</div>
       <div class="bdesc" id="bdesc"></div>
+    </div>
+
+    <!-- Detalle desplegable -->
+    <div style="background:white;border-radius:var(--radius);overflow:hidden;margin-bottom:12px">
+      <button onclick="toggleDetail()" style="width:100%;padding:12px 16px;background:none;border:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;color:#111">
+        <span>Ver detalle del periodo</span>
+        <span id="detail-arrow" style="font-size:16px;transition:transform .2s">▾</span>
+      </button>
+      <div id="period-detail" style="display:none;border-top:.5px solid var(--border)">
+        <div id="period-detail-list" style="padding:8px 0"></div>
+      </div>
     </div>
   </div>
 
@@ -289,8 +313,17 @@ body{font-family:var(--font);background:#f5f5f7;min-height:100vh;max-width:480px
   <div class="form-row">
     <div class="fg"><label>Monto total ($)</label>
       <input type="number" id="e-amount" inputmode="numeric" oninput="onEditAmountChange()"></div>
-    <div class="fg"><label>Fecha</label>
+    <div class="fg"><label>Fecha de compra</label>
       <input type="date" id="e-date"></div>
+  </div>
+  <div class="form-row">
+    <div class="fg">
+      <label>Fecha de cobro <span style="color:var(--me);font-size:10px">determina el periodo</span></label>
+      <input type="date" id="e-billing">
+    </div>
+    <div class="fg" style="display:flex;align-items:flex-end">
+      <button type="button" onclick="document.getElementById('e-billing').value=document.getElementById('e-date').value" style="width:100%;padding:10px 8px;border:1px solid var(--border);border-radius:8px;background:#fafafa;font-size:12px;cursor:pointer;color:var(--muted)">= misma que compra</button>
+    </div>
   </div>
   <div class="form-row triple" style="margin-bottom:4px">
     <div class="fg"><label>Cuotas</label>
@@ -388,6 +421,9 @@ function inPeriod(dateStr, p) {
 }
 
 // Periodo de una fecha: a qué "YYYY-MM" pertenece
+// Periodo basado en fecha de cobro (billing). Si no existe usa date.
+function billingDate(e){ return e.billing || e.date; }
+
 function periodOfDate(dateStr) {
   if (!dateStr) return '';
   var d = toISODate(dateStr);
@@ -572,9 +608,18 @@ function init(){
   document.getElementById('cfg-url').value=SCRIPT_URL;
   document.getElementById('cfg-token').value=TOKEN;
   document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('f-billing').value=new Date().toISOString().split('T')[0];
   selectWho('add','me');
   updateStatusBar(); updateLockBadge();
   if(SCRIPT_URL&&TOKEN) syncNow();
+}
+
+function syncBillingDate(){
+  var bd=document.getElementById('f-billing');
+  if(!bd.value) bd.value=document.getElementById('f-date').value;
+}
+function copyDateToBilling(){
+  document.getElementById('f-billing').value=document.getElementById('f-date').value;
 }
 
 function saveConfig(){ SCRIPT_URL=document.getElementById('cfg-url').value.trim(); TOKEN=document.getElementById('cfg-token').value.trim(); localStorage.setItem('cmr_cfg',JSON.stringify({url:SCRIPT_URL,token:TOKEN})); }
@@ -607,8 +652,10 @@ function openDrawer(expense){
   editingId=expense.id;
   var c=expense.cuotas||1,vc=expense.valorCuota||Math.round(expense.amount/c);
   var dateStr = toISODate(expense.date);
+  var billingStr = toISODate(expense.billing) || dateStr;
   document.getElementById('e-amount').value=expense.amount;
   document.getElementById('e-date').value=dateStr;
+  document.getElementById('e-billing').value=billingStr;
   document.getElementById('e-cuotas').value=c;
   document.getElementById('e-cat').value=expense.cat||'Otro';
   document.getElementById('e-desc').value=expense.desc||'';
@@ -622,11 +669,11 @@ function closeDrawer(){ document.getElementById('overlay').classList.remove('ope
 function openDrawerById(id){ var e=expenses.find(function(x){ return String(x.id)===String(id); }); if(e) openDrawer(e); }
 
 async function saveEdit(){
-  var amount=parseInt(document.getElementById('e-amount').value),date=document.getElementById('e-date').value,cat=document.getElementById('e-cat').value,desc=document.getElementById('e-desc').value.trim(),cuotas=parseInt(document.getElementById('e-cuotas').value)||1,valorCuota=cuotas>1?(parseInt(document.getElementById('e-cuota-val').value)||Math.round(amount/cuotas)):amount;
+  var amount=parseInt(document.getElementById('e-amount').value),date=document.getElementById('e-date').value,billing=document.getElementById('e-billing').value||date,cat=document.getElementById('e-cat').value,desc=document.getElementById('e-desc').value.trim(),cuotas=parseInt(document.getElementById('e-cuotas').value)||1,valorCuota=cuotas>1?(parseInt(document.getElementById('e-cuota-val').value)||Math.round(amount/cuotas)):amount;
   if(!amount||amount<=0){ toast('Monto inválido'); return; }
   if(!date){ toast('Selecciona una fecha'); return; }
   var btn=document.getElementById('drawer-save-btn'); btn.disabled=true; btn.textContent='Guardando…';
-  try{ var d=await apiPost({action:'edit',id:editingId,amount,date,desc,cat,who:editWho,cuotas,valorCuota}); if(d.success){ toast('Gasto actualizado ✓'); closeDrawer(); await syncNow(); renderList(); } else toast('Error: '+(d.error||'desconocido')); }catch(e){ toast('Error: '+e.message); }
+  try{ var d=await apiPost({action:'edit',id:editingId,amount,date,billing,desc,cat,who:editWho,cuotas,valorCuota}); if(d.success){ toast('Gasto actualizado ✓'); closeDrawer(); await syncNow(); renderList(); } else toast('Error: '+(d.error||'desconocido')); }catch(e){ toast('Error: '+e.message); }
   btn.disabled=false; btn.textContent='Guardar cambios';
 }
 async function deleteFromDrawer(){ if(!confirm('¿Eliminar este gasto?')) return; try{ var d=await apiPost({action:'delete',id:String(editingId)}); if(d.success){ toast('Eliminado'); closeDrawer(); await syncNow(); renderList(); } else toast('Error al eliminar'); }catch(e){ toast('Error: '+e.message); } }
@@ -636,12 +683,12 @@ function apiPost(body){ body.token=TOKEN; return fetch(SCRIPT_URL,{method:'POST'
 function syncNow(){ if(!SCRIPT_URL||!TOKEN) return Promise.resolve(); var btn=document.getElementById('sync-btn'); if(btn) btn.classList.add('syncing'); return fetch(SCRIPT_URL+'?action=list&token='+encodeURIComponent(TOKEN)).then(function(r){ return r.json(); }).then(function(d){ if(d.expenses){ expenses=d.expenses; updateStatusBar(); } if(btn) btn.classList.remove('syncing'); }).catch(function(){ if(btn) btn.classList.remove('syncing'); }); }
 
 async function addExpense(){
-  var amount=parseInt(document.getElementById('f-amount').value),date=document.getElementById('f-date').value,cat=document.getElementById('f-cat').value,desc=document.getElementById('f-desc').value.trim(),cuotas=parseInt(document.getElementById('f-cuotas').value)||1,valorCuota=cuotas>1?(parseInt(document.getElementById('f-cuota-val').value)||Math.round(amount/cuotas)):amount;
+  var amount=parseInt(document.getElementById('f-amount').value),date=document.getElementById('f-date').value,billing=document.getElementById('f-billing').value||date,cat=document.getElementById('f-cat').value,desc=document.getElementById('f-desc').value.trim(),cuotas=parseInt(document.getElementById('f-cuotas').value)||1,valorCuota=cuotas>1?(parseInt(document.getElementById('f-cuota-val').value)||Math.round(amount/cuotas)):amount;
   if(!amount||amount<=0){ toast('Ingresa un monto válido'); return; }
   if(!date){ toast('Selecciona una fecha'); return; }
   if(!SCRIPT_URL||!TOKEN){ toast('Configura URL y token en Config'); return; }
   var btn=document.getElementById('submit-btn'); btn.disabled=true; btn.textContent='Guardando…';
-  try{ var d=await apiPost({action:'add',amount,date,desc:desc||cat,cat,who:addWho,cuotas,valorCuota}); if(d.success){ toast('Gasto guardado ✓'); document.getElementById('f-amount').value=''; document.getElementById('f-desc').value=''; document.getElementById('f-cuotas').value='1'; onCuotasChange(); await syncNow(); } else toast('Error: '+(d.error||'desconocido')); }catch(e){ toast('Error: '+e.message); }
+  try{ var d=await apiPost({action:'add',amount,date,billing,desc:desc||cat,cat,who:addWho,cuotas,valorCuota}); if(d.success){ toast('Gasto guardado ✓'); document.getElementById('f-amount').value=''; document.getElementById('f-desc').value=''; document.getElementById('f-cuotas').value='1'; var today=new Date().toISOString().split('T')[0]; document.getElementById('f-date').value=today; document.getElementById('f-billing').value=today; onCuotasChange(); await syncNow(); } else toast('Error: '+(d.error||'desconocido')); }catch(e){ toast('Error: '+e.message); }
   btn.disabled=false; btn.textContent='Registrar gasto';
 }
 
@@ -651,17 +698,16 @@ async function importFromExcel(){ if(!SCRIPT_URL||!TOKEN){ toast('Configura URL 
 function renderList(){
   var fP=document.getElementById('fl-period').value, fW=document.getElementById('fl-who').value, fC=document.getElementById('fl-cat').value;
 
-  // build period list from expenses
-  var periods=[...new Set(expenses.map(function(e){ return periodOfDate(e.date); }))].filter(Boolean).sort().reverse();
+  var periods=[...new Set(expenses.map(function(e){ return periodOfDate(billingDate(e)); }))].filter(Boolean).sort().reverse();
   var pSel=document.getElementById('fl-period'),curP=pSel.value;
   pSel.innerHTML='<option value="">Todos los periodos</option>'+periods.map(function(p){ return '<option value="'+p+'"'+(p===curP?' selected':'')+'>'+periodLabel(p)+'</option>'; }).join('');
 
-  var cats=[...new Set(expenses.map(function(e){ return e.cat; }))].filter(Boolean).sort();
+  var cats=[...new Set(expenses.map(function(e){ return (e.cat&&e.cat.length<30&&!/^\d{4}-\d{2}/.test(e.cat))?e.cat:'Otro'; }))].filter(Boolean).sort();
   var cSel=document.getElementById('fl-cat'),curC=cSel.value;
   cSel.innerHTML='<option value="">Todas</option>'+cats.map(function(c){ return '<option value="'+c+'"'+(c===curC?' selected':'')+'>'+c+'</option>'; }).join('');
 
   var filtered=expenses;
-  if(fP) filtered=filtered.filter(function(e){ return periodOfDate(e.date)===fP; });
+  if(fP) filtered=filtered.filter(function(e){ return periodOfDate(billingDate(e))===fP; });
   if(fW) filtered=filtered.filter(function(e){ return e.who===fW; });
   if(fC) filtered=filtered.filter(function(e){ return e.cat===fC; });
 
@@ -731,44 +777,44 @@ function renderSummary(){
   document.getElementById('sum-period-name').textContent=periodLabel(p);
   document.getElementById('sum-period-dates').textContent='19 '+shortMonth(r.start)+' al 18 '+shortMonth(r.end)+' · '+r.start.slice(0,4);
 
-  // gastos del periodo (compras cuya fecha cae en el rango 19→18)
-  var periodExpenses=expenses.filter(function(e){ return inPeriod(e.date,p); });
-
-  // totales por dueño: compras directas + cuotas que vencen en el mes del periodo
   var totMe=0,totHer=0,totShared=0,nMe=0,nHer=0,nShared=0,catMap={};
+  var detailItems=[];
 
-  // 1. Compras sin cuotas (o cuotas=1) que caen en el periodo → monto completo
-  // 2. Compras en cuotas que caen en el periodo → valorCuota (primera cuota)
-  // 3. Cuotas de compras anteriores que vencen en el mes p → cuotaForPeriod
   expenses.forEach(function(e){
     var c=e.cuotas||1, vc=e.valorCuota||Math.round(e.amount/c);
     var contribution=0;
+    var bd=billingDate(e);
+
     if(c===1){
-      // gasto contado: solo si cae en el periodo
-      if(inPeriod(e.date,p)) contribution=e.amount;
+      if(inPeriod(bd,p)) contribution=e.amount;
     } else {
-      // gasto en cuotas: aporta cuotaForPeriod (cuotas cuyo mes calendario = p)
       contribution=cuotaForPeriod(e,p);
     }
     if(!contribution) return;
-    // cat seguro: evita que timestamps o valores vacios aparezcan como categoria
-    var safeCat = (e.cat && e.cat.length < 30 && !/^\d{4}-\d{2}/.test(e.cat)) ? e.cat : 'Otro';
+
+    var safeCat=(e.cat&&e.cat.length<30&&!/^\d{4}-\d{2}/.test(e.cat))?e.cat:'Otro';
+    var safeDesc=(e.desc&&e.desc.length<80&&!/^\d{4}-\d{2}/.test(e.desc))?e.desc:safeCat;
     if(!catMap[safeCat]) catMap[safeCat]={me:0,her:0,shared:0};
-    if(e.who==='me'){    totMe+=contribution;     nMe++;     catMap[safeCat].me+=contribution; }
-    else if(e.who==='her'){totHer+=contribution;  nHer++;    catMap[safeCat].her+=contribution; }
+
+    if(e.who==='me'){    totMe+=contribution; nMe++; catMap[safeCat].me+=contribution; }
+    else if(e.who==='her'){totHer+=contribution; nHer++; catMap[safeCat].her+=contribution; }
     else{                 totShared+=contribution; nShared++; catMap[safeCat].shared+=contribution; }
+
+    detailItems.push({ desc:safeDesc, cat:safeCat, who:e.who, amount:contribution, cuotas:c, vc:vc, bd:bd });
   });
 
+  var totAll=totMe+totHer+totShared;
   document.getElementById('metrics-period').innerHTML=
     mc('Felipe',fmt(totMe),nMe+' items','me')+
     mc('Maca',fmt(totHer),nHer+' items','her')+
     mc('Compartido',fmt(totShared),nShared+' items','shared');
+  document.getElementById('total-period').textContent=fmt(totAll);
 
   // comprometido futuro
   var commMe=0,commHer=0,commShared=0;
   expenses.forEach(function(e){
-    var r=committedFromPeriod(e,p);
-    if(e.who==='me') commMe+=r; else if(e.who==='her') commHer+=r; else commShared+=r;
+    var r2=committedFromPeriod(e,p);
+    if(e.who==='me') commMe+=r2; else if(e.who==='her') commHer+=r2; else commShared+=r2;
   });
   var commTotal=commMe+commHer+commShared;
   document.getElementById('committed-banner').style.display=commTotal>0?'flex':'none';
@@ -788,6 +834,33 @@ function renderSummary(){
     diff>0?'Felipe tiene '+fmt(diff)+' más en gastos propios. Cada uno aporta su mitad de los compartidos: '+fmt(half)+'.':
     diff<0?'Maca tiene '+fmt(Math.abs(diff))+' más en gastos propios. Cada uno aporta su mitad de los compartidos: '+fmt(half)+'.':
     'Gastos propios iguales. Cada uno aporta su mitad de los compartidos: '+fmt(half)+'.';
+
+  // detalle
+  detailItems.sort(function(a,b){ return b.amount-a.amount; });
+  var dl=document.getElementById('period-detail-list');
+  if(!detailItems.length){ dl.innerHTML='<div style="padding:12px 16px;font-size:13px;color:var(--muted)">Sin gastos</div>'; }
+  else {
+    dl.innerHTML=detailItems.map(function(it){
+      var wl=it.who==='me'?'Felipe':it.who==='her'?'Maca':'Comp.';
+      var bc=it.who==='me'?'bme':it.who==='her'?'bher':'bshared';
+      var cuotaNote=it.cuotas>1?' <span style="font-size:11px;color:var(--muted)">(cuota '+fmt(it.vc)+')</span>':'';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:.5px solid var(--border)">'+
+        '<span class="wbadge '+bc+'" style="font-size:10px;padding:2px 6px">'+wl+'</span>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+it.desc+'</div>'+
+        '<div style="font-size:11px;color:var(--muted)">'+it.cat+'</div></div>'+
+        '<div style="font-size:14px;font-weight:600;white-space:nowrap">'+fmt(it.amount)+cuotaNote+'</div></div>';
+    }).join('')+
+    '<div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:13px;font-weight:600;background:#fafafa">'+
+    '<span>Total</span><span>'+fmt(totAll)+'</span></div>';
+  }
+}
+
+function toggleDetail(){
+  var el=document.getElementById('period-detail');
+  var arrow=document.getElementById('detail-arrow');
+  var open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  arrow.style.transform=open?'rotate(180deg)':'';
 }
 
 function mc(label,val,count,cls){ return '<div class="mcard"><div class="mlabel">'+label+'</div><div class="mval '+cls+'">'+val+'</div><div class="mcount">'+count+'</div></div>'; }

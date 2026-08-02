@@ -800,7 +800,7 @@ function renderSummary(){
     else if(e.who==='her'){totHer+=contribution; nHer++; catMap[safeCat].her+=contribution; }
     else{                 totShared+=contribution; nShared++; catMap[safeCat].shared+=contribution; }
 
-    detailItems.push({ desc:safeDesc, cat:safeCat, who:e.who, amount:contribution, cuotas:c, vc:vc, bd:bd });
+    detailItems.push({ id:e.id, desc:safeDesc, cat:safeCat, who:e.who, amount:contribution, cuotas:c, vc:vc, bd:bd, date:toISODate(e.date) });
   });
 
   var totAll=totMe+totHer+totShared;
@@ -836,23 +836,56 @@ function renderSummary(){
     'Gastos propios iguales. Cada uno aporta su mitad de los compartidos: '+fmt(half)+'.';
 
   // detalle
-  detailItems.sort(function(a,b){ return b.amount-a.amount; });
+  detailItems.sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+  var checkedKey = 'cmr_checked_'+p;
+  var checked;
+  try { checked = JSON.parse(localStorage.getItem(checkedKey)||'{}'); } catch(e){ checked={}; }
+
   var dl=document.getElementById('period-detail-list');
   if(!detailItems.length){ dl.innerHTML='<div style="padding:12px 16px;font-size:13px;color:var(--muted)">Sin gastos</div>'; }
   else {
+    var confirmedTotal=0;
+    detailItems.forEach(function(it){ if(checked[it.id]) confirmedTotal+=it.amount; });
+
     dl.innerHTML=detailItems.map(function(it){
       var wl=it.who==='me'?'Felipe':it.who==='her'?'Maca':'Comp.';
       var bc=it.who==='me'?'bme':it.who==='her'?'bher':'bshared';
-      var cuotaNote=it.cuotas>1?' <span style="font-size:11px;color:var(--muted)">(cuota '+fmt(it.vc)+')</span>':'';
-      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:.5px solid var(--border)">'+
-        '<span class="wbadge '+bc+'" style="font-size:10px;padding:2px 6px">'+wl+'</span>'+
-        '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+it.desc+'</div>'+
-        '<div style="font-size:11px;color:var(--muted)">'+it.cat+'</div></div>'+
-        '<div style="font-size:14px;font-weight:600;white-space:nowrap">'+fmt(it.amount)+cuotaNote+'</div></div>';
+      var cuotaNote=it.cuotas>1?' <span style="font-size:10px;color:var(--muted)">(cuota)</span>':'';
+      var isChecked=!!checked[it.id];
+      var rowStyle=isChecked?'background:#f6fff4;':'';
+      var checkStyle=isChecked
+        ?'width:24px;height:24px;border-radius:50%;background:#3B6D11;border:none;color:white;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center'
+        :'width:24px;height:24px;border-radius:50%;background:white;border:1.5px solid #ccc;color:transparent;font-size:14px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:.5px solid var(--border);'+rowStyle+'">'+
+        '<button onclick="toggleCheck(\''+p+'\',\''+it.id+'\')" style="'+checkStyle+'">✓</button>'+
+        '<span class="wbadge '+bc+'" style="font-size:10px;padding:2px 6px;flex-shrink:0">'+wl+'</span>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:'+(isChecked?'400':'500')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+(isChecked?'text-decoration:line-through;color:var(--muted)':'')+'">'+it.desc+'</div>'+
+          '<div style="font-size:11px;color:var(--muted)">'+it.cat+' · '+fmtDate(it.date)+'</div>'+
+        '</div>'+
+        '<div style="font-size:14px;font-weight:600;white-space:nowrap;color:'+(isChecked?'var(--muted)':'#111')+'">'+fmt(it.amount)+cuotaNote+'</div></div>';
     }).join('')+
-    '<div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:13px;font-weight:600;background:#fafafa">'+
-    '<span>Total</span><span>'+fmt(totAll)+'</span></div>';
+    '<div style="padding:10px 14px;background:#fafafa;border-top:.5px solid var(--border)">'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px">'+
+        '<span>Confirmados en estado de cuenta</span><span id="detail-confirmed">'+fmt(confirmedTotal)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700">'+
+        '<span>Total periodo</span><span>'+fmt(totAll)+'</span></div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-top:4px">Diferencia: '+fmt(totAll-confirmedTotal)+'</div>'+
+    '</div>';
   }
+}
+
+function toggleCheck(period, id){
+  var key='cmr_checked_'+period;
+  var checked;
+  try { checked=JSON.parse(localStorage.getItem(key)||'{}'); } catch(e){ checked={}; }
+  if(checked[id]) delete checked[id]; else checked[id]=true;
+  localStorage.setItem(key, JSON.stringify(checked));
+  // re-render solo el detalle sin resetear todo el resumen
+  renderSummary();
+  // mantener detalle abierto
+  document.getElementById('period-detail').style.display='block';
+  document.getElementById('detail-arrow').style.transform='rotate(180deg)';
 }
 
 function toggleDetail(){
